@@ -21,24 +21,15 @@ start_sequence_string = "{0:b}".format(start_sequence)
 idle_sequence_string = "{0:b}".format(idle_sequence)
 tail_sequence_string = "{0:b}".format(tail_sequence)
 
-def rot_shift(x, n):
-    '''Performs n-bit rotational shift of x.
-    i.e. rot_shift(0b0001, 1) = 0b1000
-    rot_shift(0b0100, 1) = 0b0010
-    
-    Note: x has to be 8-bit and n > 0.
-    '''
-    return (x << n) | (x >> (8 - n))
-
 def calculate_bch(data):
     '''Calculates parity digits according to modified BCH:
     g(x) = x7 + x6 + x2 + x0
     And appends a 0 to the end of it.
     '''
-    data_0 = data               # x^0
-    data_2 = rot_shift(data, 2) # x^2
-    data_6 = rot_shift(data, 6) # x^6
-    data_7 = rot_shift(data, 7) #x ^7
+    data_0 = data      # x^0
+    data_2 = data << 2 # x^2
+    data_6 = data << 6 # x^6
+    data_7 = data << 7 # x^7
     # Perform XOR-addition
     data = data_0 ^ data_2 ^ data_6 ^ data_7 
     # Add trailing 0

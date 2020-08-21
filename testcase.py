@@ -78,3 +78,4 @@ print("Total transmission:")
 transmission = acq_sequence_string + cltu + idle_sequence_string
 print(transmission)
 
+## TO DO: write decoding algorithm.

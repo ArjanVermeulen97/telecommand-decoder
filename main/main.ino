@@ -1,59 +1,26 @@
-int RX_PIN = 2;
-int TX_PIN = 4;
-int CLOCK_PIN = 6;
+char incoming_value = 0;
+int init_seq_count = 0;
+int LED_PIN = 13;
 int state = 0;
-int clockState = 0;
-unsigned long clockStart;
-int clockCounter = 0;
-int clockInterval;
-// Overview of states in Latex
 
 void setup() {
-  pinMode(RX_PIN, INPUT_PULLUP);
-  pinMode(TX_PIN, OUTPUT);
-  pinMode(CLOCK_PIN, OUTPUT);
+  Serial.begin(9600);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 }
 
 void loop() {
-  if (state == 0) {
-    // Acquire clock signal
-
-    // Debounce
-    //delay(1);
-    
-    if (clockCounter == 0) {
-      if (digitalRead(RX_PIN) == HIGH) {
-        clockCounter++;
-        clockStart = millis();
-        clockState = 1;
-      } 
-  
-    if (clockState == 1) {
-      if (digitalRead(RX_PIN) == LOW) {
-        clockCounter++;
-        clockState = 0;
-      }
-    } else {
-      if (digitalRead(RX_PIN) == HIGH) {
-        clockCounter++;
-        clockState = 1;
-      }
+  if (state == 0){
+    if(Serial.available() > 0) {
+      incoming_value = Serial.read();
+      Serial.print(incoming_value);
+      Serial.print("\n");
+      init_seq_count++;
     }
-    
-    }
-
-    if (clockCounter == 64) {
-      clockInterval = round((millis() - clockStart)/64);
+    if (init_seq_count == 64) {
+      Serial.print("Start sequence passed, state 1\n");
       state = 1;
+      digitalWrite(LED_PIN, HIGH);
     }
-    
   }
-
-  if (state == 1) {
-    digitalWrite(CLOCK_PIN, HIGH);
-    delay(clockInterval);
-    digitalWrite(CLOCK_PIN, LOW);
-    delay(clockInterval);
-  }
-
 }

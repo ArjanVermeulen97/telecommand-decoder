@@ -5,6 +5,7 @@ int start_seq_counter = 0;
 long START_SEQUENCE = 0xEB90;
 long start_buffer = 0;
 
+int IDLE_SEQUENCE = 0x55;
 byte recv_buffer[8];
 int recv_bytes = 0;
 
@@ -76,8 +77,11 @@ void loop() {
         }
         recv_buffer[recv_bytes] = recv_buffer[recv_bytes] + (recvBin() << (7 - i));
       }
-      // Increment the amount of octets we received already
-      recv_bytes++;
+      // Increment the amount of octets we received already, unless we received an idle sequence
+      // instead of a CLTU. So idle sequences are recorded, but later overwritten.
+      if (recv_bytes > 0 || recv_buffer[0] != IDLE_SEQUENCE) {
+        recv_bytes++;
+      }
       if (recv_bytes >= 8) {
         // Reset counter
         recv_bytes = recv_bytes % 8;

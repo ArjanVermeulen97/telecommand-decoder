@@ -14,10 +14,22 @@ int STATE_ACQ_LED = 2;
 int STATE_START_LED = 4;
 int STATE_RECV_LED = 6;
 
+// If not zero: 
+//   - If filler = 1: reject
+//   - If filler = 0: check if error is in error table and is not 1:
+//       -> flip that bit and report error corrected
+//   - Reject
+
+// For transfer layer:
+// If not zero: reject
+
+// Output:
+// Flag: AD/BC/BD
+// Data: 010101010101010101010101010101010101010101010........................
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600);
+  Serial.begin(2400);
   pinMode(STATE_ACQ_LED, OUTPUT);
   pinMode(STATE_START_LED, OUTPUT);
   pinMode(STATE_RECV_LED, OUTPUT);
@@ -88,8 +100,50 @@ void loop() {
         // Process CLTU HERE
         Serial.println("<Received CLTU>");
         for (int i=0; i<8; i++) {
-          Serial.println(recv_buffer[i], BIN);
+          Serial.print(">");
+          Serial.print(i);
+          Serial.print(": ");
+          printBits(recv_buffer[i]);
+          Serial.print("\n");
         }
+        byte remainder = crc(recv_buffer);
+        Serial.print("Remainder: ");
+        Serial.println(remainder, BIN);
+
+        if (remainder == 0) {
+          Serial.println("CLTU approved");
+        } else {
+          boolean correctable = false;
+          for (int i=0; i<8; i++) {
+            for (int j=0; j<8; j++) {
+              if (correctable == false) {
+                recv_buffer[i] = recv_buffer[i] ^ (B1 << 7-j);
+                if (crc(recv_buffer) == 0) {
+                  correctable = true;
+                  Serial.print("Correctable error found in position ");
+                  Serial.println(i*8 + j);
+                } else {
+                  recv_buffer[i] = recv_buffer[i] ^ (B1 << 7-j);
+                }
+              }
+            }
+          }
+          if (remainder == 1) {
+            correctable = false;
+          }
+          if (correctable == false) {
+            Serial.println("CLTU rejected");
+          } else {
+            Serial.println("<Corrected CLTU>");
+            for (int i=0; i<8; i++) {
+              Serial.print(">");
+              Serial.print(i);
+              Serial.print(": ");
+              printBits(recv_buffer[i]);
+              Serial.print("\n");
+            }
+          }
+        } 
       }
     }
   }
@@ -98,4 +152,47 @@ void loop() {
 byte recvBin() {
   byte recv_buffer = Serial.read() - 48;
   return recv_buffer;
+}
+
+void printBits(byte myByte){
+ for(byte mask = 0x80; mask; mask >>= 1){
+   if(mask  & myByte)
+       Serial.print('1');
+   else
+       Serial.print('0');
+ }
+}
+
+byte crc(byte cltu_blocks[8]) {
+  byte bin_array[63];
+  byte mask = B10000000;
+  byte result = 0;
+  for (int i=0; i<8; i++){
+    byte block = cltu_blocks[i];
+    for (int j = 0; j<8; j++){
+      if (i == 7 && j == 7) {
+        break;
+      } else {
+        bin_array[i*8 + j] = (block & (mask >> j)) >> (7-j);
+      }
+    }
+  }
+
+  for (int i=0; i<56; i++) {
+    if(bin_array[i] == 1) {
+      // XOR 11000101
+      // x7 + x6 + x2 + 1
+      bin_array[i] = 1 - bin_array[i];
+      bin_array[i+1] = 1 - bin_array[i+1];
+      bin_array[i+5] = 1 - bin_array[i+5];
+      bin_array[i+7] = 1 - bin_array[i+7];
+    }
+  }
+
+  //{0, 0, 0, 0, 0, 0, 0, ..........., 1, 0, 1, 1, 1, 0, 0, 0} -> 10111000
+  for (int i=56; i<63; i++) {
+    result = result + bin_array[i] << (62-i);
+  }
+
+  return result;
 }

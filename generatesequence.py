@@ -23,7 +23,7 @@ start_sequence_string = "{0:b}".format(start_sequence)
 idle_sequence_string = "0" + "{0:b}".format(idle_sequence)
 tail_sequence_string = "0" + "{0:b}".format(tail_sequence)
 
-def crc(value, polynomial):
+def crcold(value, polynomial):
     '''Calculate CRC checksum'''
     # Firstly, we figure out how big the number still is.
     msb_poly = floor(log(polynomial)/log(2))
@@ -35,38 +35,92 @@ def crc(value, polynomial):
     # Else call function recursively
     if 2**msb_poly > value:
         return value
+    print(f"{value:b}")
     return crc(value, polynomial)
+
+def crc(value, polynomial):
+    value = f"{value:b}"
+    valuelist = [int(digit) for digit in value]
+    
+    if polynomial == 0b11000101:
+        print((value))
+        while(len(valuelist) < 63):
+            valuelist = [0] + valuelist
+        for i in range(63 - 8):
+            if valuelist[i] == 1:
+                valuelist[i] = valuelist[i] ^ 1
+                valuelist[i+1] = valuelist[i+1] ^ 1
+                valuelist[i+5] = valuelist[i+5] ^ 1
+                valuelist[i+7] = valuelist[i+7] ^ 1
+        res = 0
+        for index, digit in enumerate(reversed(valuelist[-7:])):
+            res = res + (digit << index)
+    elif polynomial == 0b1_0001_0000_0010_0001:
+        while(len(valuelist) < FRAME_LENGTH + 40):
+            valuelist = [0] + valuelist
+        for i in range(FRAME_LENGTH + 40 - 16):
+            if valuelist[i] == 1:
+                valuelist[i] = valuelist[i] ^ 1
+                valuelist[i+4] = valuelist[i+4] ^ 1
+                valuelist[i+11] = valuelist[i+11] ^ 1
+                valuelist[i+16] = valuelist[i+16] ^ 1
+        res = 0
+        for index, digit in enumerate(reversed(valuelist[-16:])):
+            res = res + (digit << index)
+    else:
+        raise ValueError
+    res = 0
+    for index, digit in enumerate(reversed(valuelist[-7:])):
+        res = res + (digit << index)
+    return res
 
 def make_frame(frame_data):
     '''add checksum to frame data'''
     frame_data = frame_data << 16
     
-    checksum = crc(frame_data, 0b1_0001_0000_0010_0001)
+    checksum = crc(frame_data, 0b1_0001_0000_0010_0001) ^ 0b1_1111_1111_1111_1111
     frame = frame_data + checksum
     return frame
 
 def frame_to_blocks(frame):
-    '''Cut up the frame into 7 octet blocks'''
+    frameBlocks = []
+    frameLength = len(f"{frame:b}")
+    nBlocks = ceil(frameLength / 56)
+    blockFill = 56 * nBlocks - frameLength
+    frame = frame << blockFill
+    while (nBlocks > 0):
+        thisBlock = (frame >> (56 * (nBlocks - 1))) % 2**56
+        frameBlocks.append(thisBlock)
+        nBlocks = nBlocks - 1
+    return frameBlocks
+    '''Cut up the frame into 7 octet blocks
     frameblocks = []
     while frame > 0:
-        block_fill = 55 - floor(log(frame)/log(2)) 
+        block_fill = 56 - len(f"{frame:b}")
         if block_fill > 0:
             # Add fill zeros to pad block to 56 bits
             frame = frame << block_fill
         frameblocks.append(frame % 2**56)
         frame = frame >> 56
     return frameblocks
+'''
     
 def make_codeblock(frame_block):
     '''Add checksum to 7 block'''
     # Add room for parity bits
-    frame_block = frame_block << 8
+    frame_block = frame_block << 7
     # Compute checksum
     checksum = crc(frame_block, 0b11000101)
     # Complement parity bits and add padding 0
-    checksum = (checksum ^ 0b1111111) << 1
+    #print(checksum)
+    #checksum = (checksum ^ 0b1111111)
+    print(checksum)
     # Add to data
-    codeblock = "{0:b}".format(frame_block + checksum)
+    codeblock = "{0:b}".format((frame_block + checksum) << 1)
+    print(crc((frame_block + checksum), 0b11000101))
+    print()
+    while(len(codeblock) < 64):
+        codeblock = "0" + codeblock
     return codeblock
 
 def make_CLTU(codeblocks):
@@ -78,23 +132,22 @@ def make_CLTU(codeblocks):
     return CLTU
     
 def make_transmission(CLTU):
-    transmission = acq_sequence_string + CLTU + idle_sequence_string
+    transmission = acq_sequence_string + CLTU + idle_sequence_string + idle_sequence_string
     return transmission
 
 # DATA FOR FRAME HEADER ##
 data = 0
-data += 1 << (9 * 8)
-data += 2 << (8 * 8)
-data += 3 << (7 * 8)
-data += 4 << (6 * 8)
-data += 5 << (5 * 8)
-data += 6 << (4 * 8)
-data += 7 << (3 * 8)
-data += 8 << (2 * 8)
-data += 9 << (1 * 8)
-data += 10
+data += 1 << (8 * 8)
+data += 2 << (7 * 8)
+data += 3 << (6 * 8)
+data += 4 << (5 * 8)
+data += 5 << (4 * 8)
+data += 6 << (3 * 8)
+data += 7 << (2 * 8)
+data += 8 << (1 * 8)
+data += 9
 
-FRAME_LENGTH = floor(log(data)/log(2))
+FRAME_LENGTH = 72#floor(log(data)/log(2))
 
 VERSION_NUMBER = 0b11
 BYPASS_FLAG = 0b0
@@ -106,16 +159,16 @@ RESERVED_FIELD_B = 0b00
 FRAME_SEQUENCE_NUMBER = 0b0000_0001
 
 header = VERSION_NUMBER
-header = (header << 2) + BYPASS_FLAG
+header = (header << 1) + BYPASS_FLAG
 header = (header << 1) + CONTROL_COMMAND_FLAG
-header = (header << 1) + RESERVED_FIELD_A
-header = (header << 2) + SPACECRAFT_ID
-header = (header << 10) + VIRTUAL_CHANNEL_ID
-header = (header << 6) + RESERVED_FIELD_B
-header = (header << 2) + FRAME_LENGTH
+header = (header << 2) + RESERVED_FIELD_A
+header = (header << 10) + SPACECRAFT_ID
+header = (header << 6) + VIRTUAL_CHANNEL_ID
+header = (header << 2) + RESERVED_FIELD_B
+header = (header << 8) + FRAME_LENGTH
 header = (header << 8) + FRAME_SEQUENCE_NUMBER
 
-frame_data = (header << 16) + data
+frame_data = (header << 72) + data
 frame = make_frame(frame_data)
 
 frameblocks = frame_to_blocks(frame)

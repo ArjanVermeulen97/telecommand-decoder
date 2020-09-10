@@ -191,7 +191,7 @@ byte crc(byte cltu_blocks[8]) {
 
   //{0, 0, 0, 0, 0, 0, 0, ..........., 1, 0, 1, 1, 1, 0, 0, 0} -> 10111000
   for (int i=56; i<63; i++) {
-    result = result + bin_array[i] << (62-i);
+    result = result + (bin_array[i] << (62-i));
   }
 
   return result;

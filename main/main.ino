@@ -8,6 +8,9 @@ long start_buffer = 0;
 int IDLE_SEQUENCE = 0x55;
 byte recv_buffer[8];
 int recv_bytes = 0;
+boolean received_header = false;
+byte frame_length;
+byte received_frame = 0;
 
 int state = 0;
 int STATE_ACQ_LED = 2;
@@ -143,7 +146,60 @@ void loop() {
               Serial.print("\n");
             }
           }
-        } 
+        }
+        //Process content of frame
+        if (received_header == false) {
+          //first block is header
+          received_header = true;
+          received_frame++;
+          // parse header into bits
+          byte bin_array[40];
+          byte mask = B10000000;
+          byte result = 0;
+          for (int i=0; i<5; i++){
+            byte block = recv_buffer[i];
+            for (int j = 0; j<8; j++){
+              bin_array[i*8 + j] = (block & (mask >> j)) >> (7-j);
+            }
+          }
+          byte VERSION_NUMBER = (bin_array[0] << 1) + bin_array[1];
+          byte BYPASS_FLAG = bin_array[2];
+          byte CONTROL_COMMAND_FLAG = bin_array[3];
+          int SPACECRAFT_ID = 0;
+          for (int i=6; i<16; i++){
+            SPACECRAFT_ID += bin_array[i] << (9 - (i - 6));
+          }
+          byte VIRTUAL_CHANNEL_ID = 0; 
+          for (int i=16; i<22; i++) {
+            VIRTUAL_CHANNEL_ID += bin_array[i] << (5 - (i - 16));
+          }
+          byte FRAME_LENGTH = 0;
+          for (int i=24; i<32; i++) {
+            FRAME_LENGTH += bin_array[i] << (7 - (i - 24));
+          }
+          byte AMOUNT_CLTU = ceil((FRAME_LENGTH + 40 + 16)/(double)56);
+          byte FRAME_SEQUENCE_NUMBER = 0;
+          for (int i=32; i<40; i++) {
+            FRAME_SEQUENCE_NUMBER += bin_array[i] << (7 - (i - 32));
+          }
+          Serial.println("<Received frame header>");
+          Serial.print(">Version number: ");
+          Serial.println(VERSION_NUMBER);
+          Serial.print(">Bypass flag: ");
+          Serial.println(BYPASS_FLAG, BIN);
+          Serial.print(">Control and command flag: ");
+          Serial.println(CONTROL_COMMAND_FLAG);
+          Serial.print(">Spacecraft ID: 0b");
+          Serial.println(SPACECRAFT_ID, BIN);
+          Serial.print(">Virtual channel ID: 0b");
+          Serial.println(VIRTUAL_CHANNEL_ID, BIN);
+          Serial.print(">Frame length: ");
+          Serial.println(FRAME_LENGTH);
+          Serial.print(">Amount of CLTUs: ");
+          Serial.println(AMOUNT_CLTU);
+          Serial.print(">Frame sequence number: ");
+          Serial.println(FRAME_SEQUENCE_NUMBER);
+        }
       }
     }
   }

@@ -52,34 +52,43 @@ def crc(value, polynomial):
                 valuelist[i+1] = valuelist[i+1] ^ 1
                 valuelist[i+5] = valuelist[i+5] ^ 1
                 valuelist[i+7] = valuelist[i+7] ^ 1
+            #print(valuelist)
         res = 0
         for index, digit in enumerate(reversed(valuelist[-7:])):
             res = res + (digit << index)
     elif polynomial == 0b1_0001_0000_0010_0001:
-        while(len(valuelist) < FRAME_LENGTH + 40):
-            valuelist = [0] + valuelist
-        for i in range(FRAME_LENGTH + 40 - 16):
+        while(len(valuelist) < 168):
+            valuelist.append(0)
+        print(valuelist)
+        for i in range(152):
             if valuelist[i] == 1:
                 valuelist[i] = valuelist[i] ^ 1
                 valuelist[i+4] = valuelist[i+4] ^ 1
                 valuelist[i+11] = valuelist[i+11] ^ 1
                 valuelist[i+16] = valuelist[i+16] ^ 1
+        print(valuelist)
         res = 0
         for index, digit in enumerate(reversed(valuelist[-16:])):
             res = res + (digit << index)
     else:
         raise ValueError
-    res = 0
-    for index, digit in enumerate(reversed(valuelist[-7:])):
-        res = res + (digit << index)
+    #res = 0
+    #for index, digit in enumerate(reversed(valuelist[-7:])):
+    #    res = res + (digit << index)
     return res
 
 def make_frame(frame_data):
     '''add checksum to frame data'''
-    frame_data = frame_data << 16
+    while len("{0:b}".format(frame_data)) < 168:
+        frame_data = frame_data << 1
     
-    checksum = crc(frame_data, 0b1_0001_0000_0010_0001) ^ 0b1_1111_1111_1111_1111
+    checksum = crc(frame_data, 0b1_0001_0000_0010_0001)
+    print("Checksum:")
+    print("{0:b}".format(checksum))
+    #checksum = 0b1111_1111_1111_1111 ^ checksum
     frame = frame_data + checksum
+    print(crc((frame_data + checksum), 0b1_0001_0000_0010_0001))
+    print()
     return frame
 
 def frame_to_blocks(frame):
